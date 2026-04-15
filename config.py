@@ -23,26 +23,29 @@ REPORT_FILE = os.path.join(OUTPUT_DIR, "report.html")
 ANALYSIS_BATCH_SIZE = int(os.getenv("ANALYSIS_BATCH_SIZE", 32))
 
 # ── English analysis models ──────────────────────────────────────────────────
-# Sentiment: binary POSITIVE/NEGATIVE classifier fine-tuned on SST-2
+# Sentiment: RoBERTa-base fine-tuned on ~124 M tweets (TweetEval benchmark)
+# Labels: Negative / Neutral / Positive
 ENGLISH_SENTIMENT_MODEL = os.getenv(
     "ENGLISH_SENTIMENT_MODEL",
-    "distilbert-base-uncased-finetuned-sst-2-english",
+    "cardiffnlp/twitter-roberta-base-sentiment-latest",
 )
-# Emotion: 7-class (anger/disgust/fear/joy/neutral/sadness/surprise)
+# Emotion: RoBERTa-large fine-tuned on 6 diverse English emotion datasets
+# Labels: anger / disgust / fear / joy / neutral / sadness / surprise
 ENGLISH_EMOTION_MODEL = os.getenv(
     "ENGLISH_EMOTION_MODEL",
-    "j-hartmann/emotion-english-distilroberta-base",
+    "j-hartmann/emotion-english-roberta-large",
 )
 
 # ── Chinese analysis models ───────────────────────────────────────────────────
-# Sentiment: multilingual model that handles Simplified & Traditional Chinese
-# Labels: positive / neutral / negative
+# Sentiment: bert-base-chinese fine-tuned on Chinese financial news sentiment
+# Labels: Negative / Neutral / Positive
 CHINESE_SENTIMENT_MODEL = os.getenv(
     "CHINESE_SENTIMENT_MODEL",
-    "lxyuan/distilbert-base-multilingual-cased-sentiments-student",
+    "hw2942/bert-base-chinese-finetuning-financial-news-sentiment-v2",
 )
-# Emotion: multilingual emotion classifier (anger/fear/joy/love/sadness/surprise)
+# Emotion: RoBERTa-large fine-tuned on 6 diverse emotion datasets
+# Labels: anger / disgust / fear / joy / neutral / sadness / surprise
 CHINESE_EMOTION_MODEL = os.getenv(
     "CHINESE_EMOTION_MODEL",
-    "michellejieli/emotion_text_classifier",
+    "j-hartmann/emotion-english-roberta-large",
 )

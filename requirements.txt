@@ -17,3 +17,8 @@ vaderSentiment>=3.3.2
 # Deep learning models (optional but recommended)
 transformers>=4.38.0
 torch>=2.1.0
+
+# Visualization — publication-quality figures (300 dpi PNG / vector PDF)
+matplotlib>=3.8.0
+seaborn>=0.13.0
+scipy>=1.11.0

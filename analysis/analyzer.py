@@ -12,24 +12,25 @@ English pipeline
 ----------------
   1. VADER — lexicon-based, no model download, instant.
      Compound score → positive / neutral / negative label.
-  2. HuggingFace sentiment — deep-learning classifier (SST-2 fine-tune).
-     Default: distilbert-base-uncased-finetuned-sst-2-english
-  3. HuggingFace emotion — 7-class distilroberta model.
-     Default: j-hartmann/emotion-english-distilroberta-base
+  2. HuggingFace sentiment — RoBERTa-base fine-tuned on ~124 M tweets.
+     Default: cardiffnlp/twitter-roberta-base-sentiment-latest
+     Labels: Negative · Neutral · Positive
+  3. HuggingFace emotion — RoBERTa-large fine-tuned on 6 emotion datasets.
+     Default: j-hartmann/emotion-english-roberta-large
      Labels: anger · disgust · fear · joy · neutral · sadness · surprise
 
 Chinese pipeline
 ----------------
-  1. HuggingFace sentiment — multilingual model that supports Simplified and
-     Traditional Chinese.
-     Default: lxyuan/distilbert-base-multilingual-cased-sentiments-student
-     Labels: positive / neutral / negative
-  2. HuggingFace emotion — multilingual emotion classifier.
-     Default: michellejieli/emotion_text_classifier
-     Labels: anger · fear · joy · love · sadness · surprise
+  1. HuggingFace sentiment — bert-base-chinese fine-tuned on Chinese
+     financial news sentiment data.
+     Default: hw2942/bert-base-chinese-finetuning-financial-news-sentiment-v2
+     Labels: Negative · Neutral · Positive
+  2. HuggingFace emotion — RoBERTa-large fine-tuned on 6 emotion datasets.
+     Default: j-hartmann/emotion-english-roberta-large
+     Labels: anger · disgust · fear · joy · neutral · sadness · surprise
 
-No model training is required — all defaults are pre-trained, freely available
-models downloaded on first run from HuggingFace Hub.  Any compatible
+All defaults are fine-tuned BERT / RoBERTa checkpoints freely available on
+HuggingFace Hub and downloaded automatically on first run.  Any compatible
 text-classification model can be swapped via .env settings.
 
 Output columns added
@@ -185,18 +186,17 @@ def add_hf_sentiment(
     """
     Add HuggingFace sentiment predictions using language-specific models.
 
-    English model  (default: distilbert-base-uncased-finetuned-sst-2-english)
+    English model  (default: cardiffnlp/twitter-roberta-base-sentiment-latest)
     ─────────────
-    Fine-tuned on the Stanford Sentiment Treebank v2 (SST-2).
-    Pre-trained model, no additional training required.
-    Labels: POSITIVE / NEGATIVE
+    RoBERTa-base fine-tuned on ~124 M tweets using the TweetEval benchmark.
+    Trained by Cardiff NLP on social-media text — well suited to YouTube
+    comments and other informal, short-form content.
+    Labels: Negative / Neutral / Positive
 
-    Chinese model  (default: lxyuan/distilbert-base-multilingual-cased-sentiments-student)
+    Chinese model  (default: hw2942/bert-base-chinese-finetuning-financial-news-sentiment-v2)
     ─────────────
-    Knowledge-distilled multilingual model trained on 7 languages including
-    Simplified and Traditional Chinese.
-    Pre-trained model, no additional training required.
-    Labels: positive / neutral / negative
+    bert-base-chinese fine-tuned on Chinese financial news sentiment data.
+    Labels: Negative / Neutral / Positive
 
     Added columns:
       sentiment_label   str    model prediction label
@@ -253,19 +253,18 @@ def add_hf_emotion(
     """
     Add HuggingFace emotion predictions using language-specific models.
 
-    English model  (default: j-hartmann/emotion-english-distilroberta-base)
+    English model  (default: j-hartmann/emotion-english-roberta-large)
     ─────────────
-    Fine-tuned DistilRoBERTa on 6 English emotion datasets covering social
-    media, news, and dialogue.
-    Pre-trained model, no additional training required.
+    Full RoBERTa-large fine-tuned on 6 diverse English emotion datasets
+    covering social media, news, and dialogue.
     Labels: anger · disgust · fear · joy · neutral · sadness · surprise
 
-    Chinese model  (default: michellejieli/emotion_text_classifier)
+    Chinese model  (default: j-hartmann/emotion-english-roberta-large)
     ─────────────
-    Multilingual RoBERTa-base fine-tuned for emotion classification.
-    Handles Chinese, English, and mixed-language text.
-    Pre-trained model, no additional training required.
-    Labels: anger · fear · joy · love · sadness · surprise
+    Same RoBERTa-large checkpoint as English.  No high-quality dedicated
+    Chinese emotion model currently exists at this scale on HuggingFace;
+    override via CHINESE_EMOTION_MODEL in .env when one becomes available.
+    Labels: anger · disgust · fear · joy · neutral · sadness · surprise
 
     Added columns:
       emotion_label   str    predicted dominant emotion

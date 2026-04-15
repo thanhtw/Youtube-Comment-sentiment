@@ -7,6 +7,7 @@ from .analyzer import (
     compute_stats,
     generate_html_report,
 )
+from .visualize import generate_figures
 
 __all__ = [
     "add_language_column",
@@ -15,4 +16,5 @@ __all__ = [
     "add_hf_emotion",
     "compute_stats",
     "generate_html_report",
+    "generate_figures",
 ]

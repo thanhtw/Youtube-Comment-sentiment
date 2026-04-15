@@ -30,6 +30,7 @@ from analysis.analyzer import (
     compute_stats,
     generate_html_report,
 )
+from analysis.visualize import generate_figures
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +64,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device", type=int, default=-1,
         help="Torch device: -1=CPU, 0=first GPU, etc."
+    )
+    parser.add_argument(
+        "--figures-dir", default=None,
+        help="Directory to save publication figures (default: <output-dir>/figures/)."
+    )
+    parser.add_argument(
+        "--figures-fmt", default="png", choices=["png", "pdf"],
+        help="Figure format: png (300 dpi) or pdf (vector). Default: png."
     )
     return parser.parse_args()
 
@@ -147,6 +156,12 @@ def run(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
 
     report_path = os.path.join(args.output_dir, "report.html")
     generate_html_report(channel_info, stats, df, output_path=report_path)
+
+    # Publication-quality figures
+    figures_dir = getattr(args, "figures_dir", None) or os.path.join(args.output_dir, "figures")
+    figures_fmt = getattr(args, "figures_fmt", "png")
+    logger.info("Generating publication figures (%s) → %s …", figures_fmt, figures_dir)
+    generate_figures(df, out_dir=figures_dir, fmt=figures_fmt)
 
     logger.info("Analysis complete. Open %s to view the report.", report_path)
     return df
