@@ -8,6 +8,7 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Iterator
+import datetime
 
 import googleapiclient.discovery
 import googleapiclient.errors
@@ -150,10 +151,19 @@ class YouTubeCollector:
                 for item in stats_resp.get("items", []):
                     stats = item.get("statistics", {})
                     snippet = item.get("snippet", {})
+                    published_str = snippet.get("publishedAt", "")
+                    if published_str:
+                        try:
+                            published_dt = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=5*365)
+                            if published_dt < cutoff:
+                                return  # since videos are ordered newest first, stop here
+                        except ValueError:
+                            pass  # if parsing fails, still yield
                     yield VideoMeta(
                         video_id=item["id"],
                         title=snippet.get("title", ""),
-                        published_at=snippet.get("publishedAt", ""),
+                        published_at=published_str,
                         view_count=int(stats.get("viewCount", 0)),
                         like_count=int(stats.get("likeCount", 0)),
                         comment_count=int(stats.get("commentCount", 0)),
