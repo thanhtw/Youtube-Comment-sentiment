@@ -18,6 +18,8 @@ import os
 import sys
 
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -47,7 +49,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input", default=default_input,
-        help=f"Raw comments CSV to analyse (default: {default_input})."
+        help=f"Raw comments CSV/XLSX to analyse (default: {default_input})."
+    )
+    parser.add_argument(
+        "--excel", default=None,
+        help="Excel file (e.g., YTcomment.xlsx) to use for train/test. Overrides --input if set."
+    )
+    parser.add_argument(
+        "--test-size", type=float, default=0.2,
+        help="Test set proportion if using Excel (default: 0.2)."
     )
     parser.add_argument(
         "--output-dir", default=config.OUTPUT_DIR,
@@ -82,55 +92,91 @@ def run(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     Can be called programmatically by main.py.
     Returns the analyzed DataFrame.
     """
+
     logger.info("=== SENTIMENT ANALYSIS ===")
     logger.info("Comments to analyse: %d", len(df))
-
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Step 0 — detect language of each comment (zh / en)
-    logger.info("Detecting comment language …")
-    df = add_language_column(df, text_col="text")
+    # If ground-truth labels exist, split train/test and evaluate
+    if "label" in df.columns:
+        logger.info("Detected 'label' column. Splitting train/test for evaluation.")
+        train_df, test_df = train_test_split(df, test_size=args.test_size, random_state=42, stratify=df["label"])
+        logger.info(f"Train size: {len(train_df)}, Test size: {len(test_df)}")
 
-    # VADER — English only (lightweight, no model download)
-    logger.info("Running VADER sentiment (English comments) …")
-    df = add_vader_sentiment(df, text_col="text")
+        # Run pipeline on test set only
+        test_df = add_language_column(test_df, text_col="text")
+        test_df = add_vader_sentiment(test_df, text_col="text")
+        if not args.skip_sentiment_model:
+            test_df = add_hf_sentiment(
+                test_df,
+                en_model=config.ENGLISH_SENTIMENT_MODEL,
+                zh_model=config.CHINESE_SENTIMENT_MODEL,
+                text_col="text",
+                batch_size=config.ANALYSIS_BATCH_SIZE,
+                device=args.device,
+            )
+        if not args.skip_emotion:
+            test_df = add_hf_emotion(
+                test_df,
+                en_model=config.ENGLISH_EMOTION_MODEL,
+                zh_model=config.CHINESE_EMOTION_MODEL,
+                text_col="text",
+                batch_size=config.ANALYSIS_BATCH_SIZE,
+                device=args.device,
+            )
 
-    # HuggingFace sentiment — separate model per language
-    if not args.skip_sentiment_model:
-        logger.info(
-            "Running HuggingFace sentiment — EN: %s | ZH: %s …",
-            config.ENGLISH_SENTIMENT_MODEL,
-            config.CHINESE_SENTIMENT_MODEL,
-        )
-        df = add_hf_sentiment(
-            df,
-            en_model=config.ENGLISH_SENTIMENT_MODEL,
-            zh_model=config.CHINESE_SENTIMENT_MODEL,
-            text_col="text",
-            batch_size=config.ANALYSIS_BATCH_SIZE,
-            device=args.device,
-        )
-
-    # HuggingFace emotion — separate model per language
-    if not args.skip_emotion:
-        logger.info(
-            "Running HuggingFace emotion — EN: %s | ZH: %s …",
-            config.ENGLISH_EMOTION_MODEL,
-            config.CHINESE_EMOTION_MODEL,
-        )
-        df = add_hf_emotion(
-            df,
-            en_model=config.ENGLISH_EMOTION_MODEL,
-            zh_model=config.CHINESE_EMOTION_MODEL,
-            text_col="text",
-            batch_size=config.ANALYSIS_BATCH_SIZE,
-            device=args.device,
-        )
-
-    # Save combined analyzed CSV
-    analyzed_path = os.path.join(args.output_dir, "analyzed_all_channels.csv")
-    df.to_csv(analyzed_path, index=False, encoding="utf-8-sig")
-    logger.info("Saved analyzed data → %s", analyzed_path)
+        # Evaluate sentiment model (using 'sentiment_label' vs 'label')
+        if "sentiment_label" in test_df.columns:
+            y_true = test_df["label"].astype(str)
+            y_pred = test_df["sentiment_label"].astype(str)
+            acc = accuracy_score(y_true, y_pred)
+            prec = precision_score(y_true, y_pred, average="weighted", zero_division=0)
+            rec = recall_score(y_true, y_pred, average="weighted", zero_division=0)
+            f1 = f1_score(y_true, y_pred, average="weighted", zero_division=0)
+            logger.info("\n=== Sentiment Model Test Metrics ===\n" +
+                        f"Accuracy:  {acc:.4f}\n" +
+                        f"Precision: {prec:.4f}\n" +
+                        f"Recall:    {rec:.4f}\n" +
+                        f"F1 Score:  {f1:.4f}\n" +
+                        "\nClassification Report:\n" + classification_report(y_true, y_pred, zero_division=0))
+            # Save metrics to file
+            with open(os.path.join(args.output_dir, "test_metrics.txt"), "w", encoding="utf-8") as f:
+                f.write(f"Accuracy:  {acc:.4f}\n")
+                f.write(f"Precision: {prec:.4f}\n")
+                f.write(f"Recall:    {rec:.4f}\n")
+                f.write(f"F1 Score:  {f1:.4f}\n\n")
+                f.write(classification_report(y_true, y_pred, zero_division=0))
+        # Save test set results
+        analyzed_path = os.path.join(args.output_dir, "analyzed_test_set.csv")
+        test_df.to_csv(analyzed_path, index=False, encoding="utf-8-sig")
+        logger.info("Saved analyzed test set → %s", analyzed_path)
+        # Optionally, run on train set as well if needed
+        df = test_df
+    else:
+        # Standard pipeline (no ground-truth labels)
+        df = add_language_column(df, text_col="text")
+        df = add_vader_sentiment(df, text_col="text")
+        if not args.skip_sentiment_model:
+            df = add_hf_sentiment(
+                df,
+                en_model=config.ENGLISH_SENTIMENT_MODEL,
+                zh_model=config.CHINESE_SENTIMENT_MODEL,
+                text_col="text",
+                batch_size=config.ANALYSIS_BATCH_SIZE,
+                device=args.device,
+            )
+        if not args.skip_emotion:
+            df = add_hf_emotion(
+                df,
+                en_model=config.ENGLISH_EMOTION_MODEL,
+                zh_model=config.CHINESE_EMOTION_MODEL,
+                text_col="text",
+                batch_size=config.ANALYSIS_BATCH_SIZE,
+                device=args.device,
+            )
+        analyzed_path = os.path.join(args.output_dir, "analyzed_all_channels.csv")
+        df.to_csv(analyzed_path, index=False, encoding="utf-8-sig")
+        logger.info("Saved analyzed data → %s", analyzed_path)
 
     # Save per-channel analyzed CSVs (if channel_name column exists)
     if "channel_name" in df.columns:
@@ -170,16 +216,25 @@ def run(df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
 if __name__ == "__main__":
     args = parse_args()
 
-    if not os.path.exists(args.input):
-        logger.error(
-            "Input file not found: %s\n"
-            "Run 'python -m collection.collect' first to collect comments.",
-            args.input,
-        )
-        sys.exit(1)
+    # Support reading from Excel for train/test
+    if args.excel is not None:
+        if not os.path.exists(args.excel):
+            logger.error(f"Excel file not found: {args.excel}")
+            sys.exit(1)
+        logger.info(f"Loading comments from Excel: {args.excel}")
+        df = pd.read_excel(args.excel, dtype=str)
+    else:
+        if not os.path.exists(args.input):
+            logger.error(
+                "Input file not found: %s\n"
+                "Run 'python -m collection.collect' first to collect comments.",
+                args.input,
+            )
+            sys.exit(1)
+        logger.info("Loading comments from %s …", args.input)
+        df = pd.read_csv(args.input, dtype=str)
 
-    logger.info("Loading comments from %s …", args.input)
-    df = pd.read_csv(args.input, dtype=str)
-    df["like_count"] = pd.to_numeric(df.get("like_count", 0), errors="coerce").fillna(0).astype(int)
+    if "like_count" in df.columns:
+        df["like_count"] = pd.to_numeric(df.get("like_count", 0), errors="coerce").fillna(0).astype(int)
 
     run(df, args)
